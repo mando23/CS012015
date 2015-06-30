@@ -18,6 +18,7 @@
 #include <avr/pgmspace.h>
 #include <util/delay.h>
 #include <math.h>
+#include "LCD/lcd.h"
 
 //////General settings for clock and USART
 
