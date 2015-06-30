@@ -1,0 +1,236 @@
+#pragma region PROJECT
+
+/*****************PROYECTO****************************/
+
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
+#include <avr/pgmspace.h>
+#include <util/delay.h>
+#include <math.h>
+
+//////General settings for clock and USART
+
+#define F_CPU 1000000UL
+#define BAUD 4800UL
+#define UBRR ((F_CPU / (16* BAUD)) -1)
+
+//////Declaration of methods used in program
+
+void catch_text_uart();
+void lcd_enter_text();
+void option_setup();
+void lcd_ready();
+void setup_state();
+void main_action_one_sequence();
+void main_action_loop_sequence();
+void main_action_sequence();
+void printing_state();
+void Running_state();
+void option_state();
+unsigned char USART_RECEIVE_CHARACTER();
+
+
+//////Global variables
+
+unsigned char text_uart[101];		//Variable: text; Type: char[100]; Use: Saves text line from Terminal
+volatile double timer_overflow_count;		//Variable: timer_overflow_count; Type: Volatile; Use: Count number of overflow from the timer
+bool main_action_sequence_global_bool = false;		//Variable main_action_sequence_global_bool; Type: bool; Use: Set the direction of the program
+bool bool_printing = false;		//Variable: bool_printing; Type: bool; Use: Enables/Disables printing option
+bool bool_buzzer = false;		//Variable: bool_buzzer; Type: bool; Use: Enables/Disables buzzer option
+bool bool_LEDs = false;			//Variable: bool_LEDs; Type: bool; Use: Enables/Disables LEDs option
+static const char text_code[] PROGMEM = "abcdefghijklmnopqrstuvwxyz .";		//Code used for translation
+char const a[] PROGMEM = ".-4";
+char const b[] PROGMEM = "-...4";
+char const c[] PROGMEM = "-.-.4";
+char const d[] PROGMEM = "-..4";
+char const e[] PROGMEM = ".4";
+char const f[] PROGMEM = "..-.4";
+char const g[] PROGMEM = "--.4";
+char const h[] PROGMEM = "....4";
+char const i[] PROGMEM = "..4";
+char const j[] PROGMEM = ".---4";
+char const k[] PROGMEM = "-.-4";
+char const l[] PROGMEM = ".-..4";
+char const m[] PROGMEM = "--4";
+char const n[] PROGMEM = "-.4";
+char const o[] PROGMEM = "---4";
+char const p[] PROGMEM = ".--.4";
+char const q[] PROGMEM = "--.-4";
+char const r[] PROGMEM = ".-.4";
+char const s[] PROGMEM = "...4";
+char const t[] PROGMEM = "-4";
+char const u[] PROGMEM = "..-4";
+char const v[] PROGMEM = "...-4";
+char const w[] PROGMEM = ".--4";
+char const x[] PROGMEM = "-..-4";
+char const y[] PROGMEM = "-.--4";
+char const z[] PROGMEM = "--..4";
+char const SPACE[] PROGMEM = "444";
+char const end_point[] PROGMEM = "5";
+int count;
+double volt, digital, r1, temp;
+uint8_t ijp;
+uint8_t data [48];	// 48 byte array
+volatile uint8_t count2, mode = 0, num = 0, finish = 0;;		//Variables for Thermal Printer
+volatile uint16_t delay_local;
+
+PGM_P const string_table[] PROGMEM = 
+{
+	a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, SPACE  
+};
+
+
+unsigned char translated_text[1000];
+
+//////Timer0 overflow method
+
+ISR(TIMER0_OVF_vect)
+{
+
+}
+
+
+//////Main method
+
+
+int main (void)
+{
+	
+	//////Setup of IO
+
+	DDRC = 0b11111111;		//PORTC setup
+	PORTC = 0b00000000;		//PORTC initial conditions
+	DDRA = 0b01111001;		//PORTA setup
+	PORTA = 0b10000110;		//PORTA initial conditions
+	DDRB = 0b10110011;		//PORTB setup
+	PORTB = 0b01001100;		//PORTB initial conditions
+	DDRD &= (0 << PD3 );	//PIN PD3 setup
+	PORTD |= (1 << PD3 );	//PIN PD3 initial conditios
+	
+
+	//////Setup of LCD
+
+	lcd_init(0x0C);lcd_clrscr();
+
+	//////Setup of Serial communication
+
+	UBRRH &= ~(1 << URSEL);// must be 0 in order to write to UBRRH
+	UBRRH = UBRR >> 8;
+	UBRRL = UBRR & 0xFF;
+	UCSRC |= (1<<URSEL) | (1<<UCSZ1) | (UCSZ0);// URSEL must be 1 in order to write to UCSRC
+	UCSRB |= (1<<RXEN) | (1<<TXEN);// Enable Transmitter and Receiver
+	
+
+	//////Setup for timers
+
+	TCCR0 = 0b00000010;
+	TIMSK = 0b00000000;
+	TCNT0 = 0;
+	sei();
+	
+	//////Main loop
+
+	while (1)
+	{
+
+		lcd_enter_text_state();
+		
+		catch_text_uart();
+		
+		lcd_ready_state();
+		
+		setup_state();
+		
+		option_state();
+		
+		option_setup();
+		
+		if (main_action_sequence_global_bool)
+		{
+		
+			Running_state();
+		
+			main_action_loop_sequence();
+		
+		}
+		
+		else
+		
+		{
+		
+			Running_state();
+		
+			main_action_one_sequence();
+		
+			printing_state();
+			
+		}
+		
+		
+	}
+}
+
+
+//////Definition of methods used in program
+
+void catch_text_uart()		//Receives text from Terminal
+{
+
+}
+
+void lcd_enter_text_state()		//Starts Enter text state
+{
+
+}
+
+void option_setup()			//Starts Option menu
+{
+
+}
+
+void lcd_ready_state()		//Starts Ready state
+{
+
+}
+
+void setup_state()			//Starts Setup state
+{
+
+}
+
+void main_action_one_sequence()		//Apply main action one time
+{
+
+}
+
+void main_action_loop_sequence()	//Apply main action on a loop sequence
+{
+
+}
+
+void printing_state()		//Starts Printing state
+{
+
+}
+
+void Running_state()		//Starts running sequence indicator
+{
+
+}
+
+void option_state()			//Starts Option state
+{
+
+}
+
+unsigned char USART_RECEIVE_CHARACTER()		//Starts serial data acquisition 
+{
+	while ( !(UCSRA & (1 << RXC)) ); //Wait for the RXC to not have 0
+	return UDR; //Get the data
+}
+
+#pragma endregion PROJECT
