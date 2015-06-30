@@ -185,7 +185,6 @@ int main (void)
 			main_action_one_sequence();
 		
 			printing_state();
-
 			
 		}
 		
@@ -389,27 +388,328 @@ void lcd_enter_text_state()		//Starts Enter text state
 
 void option_setup()			//Starts Option menu
 {
-
+	bool option_setup_trigger_bool = true;
+	
+	do 
+{
+	if (!(PINB & (1 << (2))))	//Condition for Main action one sequence
+		{
+			option_setup_trigger_bool = false;					//Sets trigger 'false' for setup action
+			main_action_sequence_global_bool = false;	//Sets trigger 'false' for loop main action
+			
+			while(!(PINB & (1 << (2))));
+			
+		}
+		
+		if (!(PINB & (1 << (3))))	//Condition for Main action loop sequence
+		{
+			option_setup_trigger_bool = false;					//Sets trigger 'false' for setup action
+			main_action_sequence_global_bool = true;	//sets trigger 'true' for loop main action
+			bool_printing = false;						//Disables Printing support
+			
+			while(!(PINB & (1 << (3))));
+		}
+} while (option_setup_trigger_bool);
 }
 
 void lcd_ready_state()		//Starts Ready state
 {
-
+	lcd_clrscr();		//Clears LCD screen
+	lcd_gotoxy(0,0);	//Goes to position 0,0 in LCD
+	lcd_puts("Ready");	//Displays text in LCD
+	TIMSK = 0b00000000;	//Stops timer for LED Toggle
+	PORTA= 0b00000111;	//Sets ready LED ON
 }
 
 void setup_state()			//Starts Setup state
 {
-
+	bool setup_trigger_bool = true;	//Trigger for end setup state loop
+	do
+	{
+		if (!(PINB & (1 << (2))))	//Condition for enable/disable Printing support
+		{
+			PORTA ^= 0b00001000;	//Toggles Pin A3
+			if (bool_printing)
+			{
+				bool_printing = false;
+			}
+			else
+			{
+				bool_printing = true;
+			}
+			while(!(PINB & (1 << (2))));
+		}
+		
+		if (!(PINB & (1 << (3))))	//Condition for enable/disable Visual support
+		{
+			PORTA ^= 0b00010000;	//Toggles Pin A4
+			if (bool_LEDs)
+			{
+				bool_LEDs = false;
+			}
+			else
+			{
+				bool_LEDs = true;
+			}
+			while(!(PINB & (1 << (3))));
+		}
+		
+		if (!(PINB & (1 << (6))))	//Condition for enable/disable Audio support
+		{
+			PORTA ^= 0b00100000;	//Toggles Pin A5
+			if (bool_buzzer)
+			{
+				bool_buzzer = false;
+			} 
+			else
+			{
+				bool_buzzer = true;
+			}
+			while(!(PINB & (1 << (6))));
+		}
+		
+		if (!(PIND & (1 << (3))))	//Condition for Quiting setup state
+		{
+			setup_trigger_bool = false;	
+			while(!(PIND & (1 << (3))));
+		}
+		
+	} while(setup_trigger_bool);
+	setup_trigger_bool = true;
 }
 
 void main_action_one_sequence()		//Apply main action one time
 {
+	main_action_sequence_global_bool = true;	//Sets timer overflow to monitor STOP button
+	TIMSK = 0b00000001;							//Starts timer overflow
+	char current_char_translated = NULL;
+	int count_data = 0;
+	int ii = 0;
+		do 
+{
+	current_char_translated = translated_text[ii];		//Saves current char for future comparison
+			if (current_char_translated == '5')			//Condition for end of sentence
+			{
+				TIMSK = 0b00000000;						//Stops timer overflow
+				main_action_sequence_global_bool = false;
+			} 
+			if (current_char_translated == '.')
+			{
+				if ((bool_buzzer) && (bool_LEDs))
+				{
+				
+					_delay_ms(125);
+					PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
+					PORTA ^= 0b01000000;	//Turns on PINA4 for LED
+					_delay_ms(250);
+					PORTC ^= 0b10000000;	//Turns off PINA5 for buzzer
+					PORTA ^= 0b01000000;	//Turns off PINA4 for LED
+				} 
+				else
+				{
+					if (bool_buzzer)
+					{
+					
+						_delay_ms(125);
+						PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
+						_delay_ms(250);
+						PORTC ^= 0b10000000;	//Turns off PINA5 for buzzer	
+					}
+					if (bool_LEDs)
+					{
+						
+						_delay_ms(125);
+						PORTA ^= 0b01000000;	//Turns on PINA4 for LED
+						_delay_ms(250);
+						PORTA ^= 0b01000000;	//Turns off PINA4 for LED
+					}
+					if (bool_printing)
+					{
+					
+					}
+				}
+			}
+			if (current_char_translated == '-')
+			{
+				if ((bool_buzzer) && (bool_LEDs))
+				{
+				
+					_delay_ms(125);
+					PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
+					PORTA ^= 0b01000000;	//Turns on PINA4 for LED
+					_delay_ms(500);
+					PORTC ^= 0b10000000;	//Turns off PINA5 for buzzer
+					PORTA ^= 0b01000000;	//Turns off PINA4 for LED
+				}
+				else
+				{
+					if (bool_buzzer)
+					{
+					
+						_delay_ms(125);
+						PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
+						_delay_ms(500);
+						PORTC ^= 0b10000000;	//Turns off PINA5 for buzzer
+					}
+					if (bool_LEDs)
+					{
+					
+						_delay_ms(125);
+						PORTA ^= 0b01000000;	//Turns on PINA4 for LED
+						_delay_ms(500);
+						PORTA ^= 0b01000000;	//Turns off PINA4 for LED
+					}
+					if (bool_printing)
+					{
+					
+					}
+				}
+			}
+			if (current_char_translated == '4')			//Condition for end of letter AND/OR SPACE
+			{
+				data[count_data] = 0;
+				count_data = count_data + 1;
+				_delay_ms(750);
+			}
+			ii = ii + 1;
+} while (main_action_sequence_global_bool);
+	
+	int jj = 0;
+	do									//Clears array translated_text for future use
+{
+	translated_text[jj] = NULL;
+	jj = jj + 1;
+} while (jj<=1001);
 
+	jj = 0;
+	do									//Clears array text_uart for future use
+	{
+		text_uart[jj] = NULL;
+		jj = jj + 1;
+	} while (jj<=102);
+	
+	if (bool_printing)					//Condition to Enable/Disable printing mode
+	{
+		mode = 1;
+	}
+	else
+	{
+		mode = 0;
+	}
+	
+	bool_buzzer = false;
+	bool_LEDs = false;
+	bool_printing = false;
+	
+	PORTA= 0b00000111;
+	
 }
 
 void main_action_loop_sequence()	//Apply main action on a loop sequence
 {
+	main_action_sequence_global_bool = true;	//Sets timer overflow to monitor STOP button
+	TIMSK = 0b00000001;							//Starts timer overflow
+	int count_data = 0;
+	char current_char_translated = NULL;
+	int ii = 0;
+	do 
+	{	
+		
+		current_char_translated = translated_text[ii];		//Saves current char for future comparison
+		if (current_char_translated == '5')					//Condition for end of sentence
+		{
+			ii = 0;
+			current_char_translated = translated_text[ii];
+			_delay_ms(750);
+		}
+		if (current_char_translated == '.')
+		{
+			if ((bool_buzzer) && (bool_LEDs))
+			{
+				_delay_ms(125);
+				PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
+				PORTA ^= 0b01000000;	//Turns on PINA4 for LED
+				_delay_ms(250);
+				PORTC ^= 0b10000000;	//Turns off PINA5 for buzzer
+				PORTA ^= 0b01000000;	//Turns off PINA4 for LED
+			}
+			else
+			{
+				if (bool_buzzer)
+				{
+					_delay_ms(125);
+					PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
+					_delay_ms(250);
+					PORTC ^= 0b10000000;	//Turns off PINA5 for buzzer
+				}
+				if (bool_LEDs)
+				{
+					_delay_ms(125);
+					PORTA ^= 0b01000000;	//Turns on PINA4 for LED
+					_delay_ms(250);
+					PORTA ^= 0b01000000;	//Turns off PINA4 for LED
+				}
+			}
+		}
+		if (current_char_translated == '-')
+		{
+			if ((bool_buzzer) && (bool_LEDs))
+			{
+				_delay_ms(125);
+				PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
+				PORTA ^= 0b01000000;	//Turns on PINA4 for LED
+				_delay_ms(500);
+				PORTC ^= 0b10000000;	//Turns off PINA5 for buzzer
+				PORTA ^= 0b01000000;	//Turns off PINA4 for LED
+			}
+			else
+			{
+				if (bool_buzzer)
+				{
+					_delay_ms(125);
+					PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
+					_delay_ms(500);
+					PORTC ^= 0b10000000;	//Turns off PINA5 for buzzer
+				}
+				if (bool_LEDs)
+				{
+					_delay_ms(125);
+					PORTA ^= 0b01000000;	//Turns on PINA4 for LED
+					_delay_ms(500);
+					PORTA ^= 0b01000000;	//Turns off PINA4 for LED
+				}
+			}
+		}
+		if (current_char_translated == '4')
+		{
+			_delay_ms(750);
+		}
+		ii = ii + 1;
+		
+	} while (main_action_sequence_global_bool);
+	
+	TIMSK = 0b00000000;								//Stops timer overflow
+	main_action_sequence_global_bool = false;
+	
+	int jj = 0;
+	do												//Clears array translated_text for future use
+	{
+		translated_text[jj] = NULL;
+		jj = jj + 1;
+	} while (jj<=1001);
 
+	jj=0;
+	do												//Clears array text_uart for future use
+	{
+		text_uart[jj] = NULL;
+		jj = jj + 1;
+	} while (jj<=102);
+	
+	bool_buzzer = false;
+	bool_LEDs = false;
+	bool_printing = false;
+	PORTA= 0b00000111;
+	
 }
 
 void printing_state()		//Starts Printing state
