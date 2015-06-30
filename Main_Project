@@ -39,6 +39,14 @@ void printing_state();
 void Running_state();
 void option_state();
 unsigned char USART_RECEIVE_CHARACTER();
+void ADCConvert();
+void Motor1();
+void SPIcom();
+void Latching();
+void Strobe();
+void Motor2();
+void Delay();
+void paper_feed();
 
 //////Global variables
 
@@ -112,6 +120,12 @@ ISR(TIMER0_OVF_vect)
 	}
 }
 
+//////Timer2 interruption method
+
+ISR(TIMER2_COMP_vect)
+{
+
+}
 
 //////Main method
 
@@ -143,11 +157,21 @@ int main (void)
 	UCSRC |= (1<<URSEL) | (1<<UCSZ1) | (UCSZ0);// URSEL must be 1 in order to write to UCSRC
 	UCSRB |= (1<<RXEN) | (1<<TXEN);// Enable Transmitter and Receiver
 	
+	//////ADC inicialization
+	ADMUX = 0b01000111;
+	ADCSRA = 0b10000000;
+	
+	//////Enable SPI, master mode, clock rate fck/16
+	SPCR = 0b01010001;
+	PORTB |= (1 << PORTB4);	//Turn on PORTB4, necessary for the SPI communication
+
 	//////Setup for timers
 
 	TCCR0 = 0b00000010;
+	TCCR2 = 0b00001010;
 	TIMSK = 0b00000000;
 	TCNT0 = 0;
+	OCR2 = 128;
 	sei();
 	
 	//////Main loop
@@ -185,6 +209,8 @@ int main (void)
 			main_action_one_sequence();
 		
 			printing_state();
+		
+			paper_feed();
 			
 		}
 		
@@ -497,7 +523,10 @@ void main_action_one_sequence()		//Apply main action one time
 			{
 				if ((bool_buzzer) && (bool_LEDs))
 				{
-				
+					data[count_data] = 0;			//Saves data from translated text for future printing option
+					count_data = count_data + 1;
+					data[count_data] = 255;
+					count_data = count_data + 1;
 					_delay_ms(125);
 					PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
 					PORTA ^= 0b01000000;	//Turns on PINA4 for LED
@@ -509,7 +538,10 @@ void main_action_one_sequence()		//Apply main action one time
 				{
 					if (bool_buzzer)
 					{
-					
+						data[count_data] = 0;
+						count_data = count_data + 1;
+						data[count_data] = 255;
+						count_data = count_data + 1;
 						_delay_ms(125);
 						PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
 						_delay_ms(250);
@@ -517,7 +549,10 @@ void main_action_one_sequence()		//Apply main action one time
 					}
 					if (bool_LEDs)
 					{
-						
+						data[count_data] = 0;
+						count_data = count_data + 1;
+						data[count_data] = 255;
+						count_data = count_data + 1;
 						_delay_ms(125);
 						PORTA ^= 0b01000000;	//Turns on PINA4 for LED
 						_delay_ms(250);
@@ -525,7 +560,10 @@ void main_action_one_sequence()		//Apply main action one time
 					}
 					if (bool_printing)
 					{
-					
+						data[count_data] = 0;
+						count_data = count_data + 1;
+						data[count_data] = 255;
+						count_data = count_data + 1;
 					}
 				}
 			}
@@ -533,7 +571,12 @@ void main_action_one_sequence()		//Apply main action one time
 			{
 				if ((bool_buzzer) && (bool_LEDs))
 				{
-				
+					data[count_data] = 0;
+					count_data = count_data + 1;
+					data[count_data] = 255;
+					count_data = count_data + 1;
+					data[count_data] = 255;
+					count_data = count_data + 1;
 					_delay_ms(125);
 					PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
 					PORTA ^= 0b01000000;	//Turns on PINA4 for LED
@@ -545,7 +588,12 @@ void main_action_one_sequence()		//Apply main action one time
 				{
 					if (bool_buzzer)
 					{
-					
+						data[count_data] = 0;
+						count_data = count_data + 1;
+						data[count_data] = 255;
+						count_data = count_data + 1;
+						data[count_data] = 255;
+						count_data = count_data + 1;
 						_delay_ms(125);
 						PORTC ^= 0b10000000;	//Turns on PINA5 for buzzer
 						_delay_ms(500);
@@ -553,7 +601,12 @@ void main_action_one_sequence()		//Apply main action one time
 					}
 					if (bool_LEDs)
 					{
-					
+						data[count_data] = 0;
+						count_data = count_data + 1;
+						data[count_data] = 255;
+						count_data = count_data + 1;
+						data[count_data] = 255;
+						count_data = count_data + 1;
 						_delay_ms(125);
 						PORTA ^= 0b01000000;	//Turns on PINA4 for LED
 						_delay_ms(500);
@@ -561,7 +614,12 @@ void main_action_one_sequence()		//Apply main action one time
 					}
 					if (bool_printing)
 					{
-					
+						data[count_data] = 0;
+						count_data = count_data + 1;
+						data[count_data] = 255;
+						count_data = count_data + 1;
+						data[count_data] = 255;
+						count_data = count_data + 1;
 					}
 				}
 			}
@@ -714,7 +772,31 @@ void main_action_loop_sequence()	//Apply main action on a loop sequence
 
 void printing_state()		//Starts Printing state
 {
-
+	bool printing_routing_bool_trigger = true;
+	TIMSK = 0b10000000;
+	do 
+	{
+		if (mode == 1)	//Go to mode 1 temperature measurement
+		{
+			ADCConvert();	//ADC conversion for temperature measurement
+		}
+		
+		if (mode == 3)	//Go to mode 3 (SPI communication)
+		{
+			SPIcom();	//Send data to thermal printer
+		}
+		if (mode == 0)
+		{
+			printing_routing_bool_trigger = false;
+				int kk = 0;
+				do
+				{
+					data[kk] = 0;
+					kk = kk + 1;
+				} while (kk<=48);
+		}
+	} while (printing_routing_bool_trigger);
+	TIMSK = 0b00000000;
 }
 
 void Running_state()		//Starts running sequence indicator
@@ -735,6 +817,52 @@ unsigned char USART_RECEIVE_CHARACTER()		//Starts serial data acquisition
 {
 	while ( !(UCSRA & (1 << RXC)) ); //Wait for the RXC to not have 0
 	return UDR; //Get the data
+}
+
+void ADCConvert ()		//Starts ADC Method
+{
+
+}
+
+void Motor1 ()	//Feed paper 40 lines (mode 2)
+{
+
+}
+
+void SPIcom ()	//Send data to printer (mode 3)
+{
+
+}
+
+void Latching ()	//Put data in latch register (mode 4)
+{
+
+}
+
+void Strobe ()	//Turn on strobes on thermal head (mode 5)
+{
+
+}
+
+void Motor2 ()	//Feed paper one line (mode 6)
+{
+
+	
+}
+
+void Delay ()	//mode 7 (delay)
+{
+
+}
+
+void paper_feed()	//Feed paper 125 lines (mode 2)
+{
+
+}
+
+void Motor3()
+{
+
 }
 
 
