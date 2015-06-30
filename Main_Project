@@ -124,7 +124,32 @@ ISR(TIMER0_OVF_vect)
 
 ISR(TIMER2_COMP_vect)
 {
-
+	if (mode == 2)	//Go to mode 2
+	{
+		Motor1();	//Feed 40 lines of paper
+	}
+	if (mode == 4)	//Go to mode 4
+	{
+		Latching();	//Put data into latch register
+	}
+	
+	if (mode == 5)	//Go to mode 5
+	{
+		Strobe();	//Turn on thermal head strobes
+	}
+	
+	if (mode == 6)	//Go to mode 6
+	{
+		Motor2();	//Feed 1 line of paper
+	}
+	if (mode == 7)	//Go to mode 7
+	{
+		Delay();	//Delay
+	}
+	if (finish == 1)	//Move motor
+	{
+		Motor3();		//Feed 125 lines of paper
+	}
 }
 
 //////Main method
@@ -821,48 +846,154 @@ unsigned char USART_RECEIVE_CHARACTER()		//Starts serial data acquisition
 
 void ADCConvert ()		//Starts ADC Method
 {
-
+	ADCSRA = ADCSRA | (1 << ADSC);	//Start ADC
+	while(!(ADCSRA & (1 << ADIF)));	//Wait
+	ADCSRA = ADCSRA | (1 << ADIF);	//Clear bit
+	digital = ADCW;	//Move digital value to variable (digital)
+	volt = digital * (5/1024.0);	//Calculate voltage
+	r1 = ((10*5)/volt)-10;	//Calculate resistance value
+	temp = (1/(((2.308/3950.0)*(log(r1/30.0)))+(1/298.0)))-273;	//Calculate temperature
+	if ((temp<=70) & (!(PINA & 0b00000010)) & (~(!(PINA & 0b00000100))))	//Security conditions temperature <= 70 `C, paper detected, head switch on
+	{
+		mode = 2;	// Go to mode 2 Feed paper
+	}
 }
 
 void Motor1 ()	//Feed paper 40 lines (mode 2)
 {
-
+	count2 ++;
+	if (count2<=80)  //Send PWM to motor
+	{
+		PORTC ^= 0b00000001; //Toggle Portc0
+	}
+	else
+	{
+		count2 = 0; // Reset counter
+		mode = 3; //Go to mode 3 (SPI communication)
+	}
 }
 
 void SPIcom ()	//Send data to printer (mode 3)
 {
-
+	for (ijp = 0;ijp < 48;ijp++)	//Send information Byte by Byte 48 times
+	{
+		SPDR = data [ijp];	//Send one of the 48 Bytes in the data array
+		while(!(SPSR & (1 << SPIF)));	//Wait for end of transmission
+	}
+	mode = 4;	//Go to mode 4 (Latch)
 }
 
 void Latching ()	//Put data in latch register (mode 4)
 {
-
+	count2 ++;
+	if (count2 <= 2)	//Toggle Portb4 twice
+	{
+		PORTB ^= 0b00010000;	//Toggle portb4
+	}
+	else
+	{
+		mode = 5;	//Go to mode 5 (Strobes)
+		count2 = 0;	//Clear count
+	}
 }
 
 void Strobe ()	//Turn on strobes on thermal head (mode 5)
 {
-
+	count2 ++;
+	if (count2 == 1)
+	{
+		PORTC |= (1 << PORTC1);	//Turn on strobe 1
+	}
+	if (count2 == 3)
+	{
+		PORTC &= ~(1 << PORTC1);	//Turn off strobe 1
+		PORTC |= (1 << PORTC2);		//Turn on strobe 2
+	}
+	if (count2 == 5)
+	{
+		PORTC &= ~(1 << PORTC2);	//Turn off strobe 2
+		PORTC |= (1 << PORTC3);		//Turn on strobe 3
+	}
+	if (count2 == 7)
+	{
+		PORTC &= ~(1 << PORTC3);	//Turn off strobe 3
+		PORTC |= (1 << PORTC4);		//Turn on strobe 4
+	}
+	if (count2 == 9)
+	{
+		PORTC &= ~(1 << PORTC4);	//Turn off strobe 4
+		PORTC |= (1 << PORTC5);		//Turn on strobe 5
+	}
+	if (count2 == 11)
+	{
+		PORTC &= ~(1 << PORTC5);	//Turn off strobe 5
+		PORTC |= (1 << PORTC6);		//Turn on strobe 6
+	}
+	if (count2 == 13)
+	{
+		PORTC &= ~(1 << PORTC6);	//Turn off strobe 7
+		mode = 6;	//Go to mode 6 (Feed paper 1 line)
+		count2 = 0;	//Clear count
+	}
 }
 
 void Motor2 ()	//Feed paper one line (mode 6)
 {
-
+	count2 ++;
+	num ++;
+	
+	if (count2<=4)	//Send PWM to motor
+	{
+		PORTC ^= 0b00000001;	//Toggle portc0
+	}
+	else
+	{
+		if (num <= 5)		//Repeat printing 5 times to get a thicker line
+		{
+			count2 = 0;		//Clear count
+			mode = 7;		//Go to mode 7 (Delay)
+			
+		}
+		else				//When finishing printing clear support variables
+		{
+			count2 = 0;		//clear count
+			mode = 0;		//clear mode
+			num = 0;		//clear num
+		}
+	}
 	
 }
 
 void Delay ()	//mode 7 (delay)
 {
-
+	delay_local ++;
+	if (delay_local == 200)	//Wait until delay gets to 200
+	{
+		mode = 3;	//GO to mode 3 (SPI communication), we repeat printing 5 times to get a thicker line
+		delay_local = 0;	//Clear dealy
+	}
 }
 
 void paper_feed()	//Feed paper 125 lines (mode 2)
 {
-
+	finish = 1;
+	TIMSK = 0b10000000;
+	while (finish);
+	TIMSK = 0b00000000;
 }
 
 void Motor3()
 {
-
+	count ++;
+	if (count<=250)  //Send PWM to motor
+	{
+		PORTC ^= 0b00000001; //Toggle Portc0
+	}
+	else
+	{
+		count = 0; // Reset counter
+		finish = 0; //Finish motor routine
+	}
 }
 
 

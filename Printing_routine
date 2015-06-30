@@ -1,0 +1,251 @@
+/*
+ * printer_v3.c
+ *
+ * Created: 29/06/2015 12:11:29 p. m.
+ *  Author: Alfonso
+ */ 
+
+
+#include <avr/io.h>
+#include <math.h>
+#include <avr/interrupt.h>
+
+double volt, digital, r1, temp;
+uint8_t i;
+uint8_t data [48];	// 48 byte array
+volatile uint8_t count, mode = 0, num = 0, finish = 0;
+volatile uint16_t delay;
+
+
+void ADCConvert (void)
+{
+	ADCSRA = ADCSRA | (1 << ADSC);	//Start ADC
+	while(!(ADCSRA & (1 << ADIF)));	//Wait
+	ADCSRA = ADCSRA | (1 << ADIF);	//Clear bit
+	digital = ADCW;	//Move digital value to variable (digital)
+	volt = digital * (5/1024.0);	//Calculate voltage
+	r1 = ((10*5)/volt)-10;	//Calculate resistance value
+	temp = (1/(((2.308/3950.0)*(log(r1/30.0)))+(1/298.0)))-273;	//Calculate temperature
+	if ((temp<=70) & (!(PINA & 0b00000010)) & (~(!(PINA & 0b00000100))))	//Security conditions temperature <= 70 `C, paper detected, head switch on
+	{
+		mode = 2;	// Go to mode 2 Feed paper
+	}
+}
+
+void Motor1 (void)	//Feed paper 40 lines (mode 2)
+{
+	count ++;
+	if (count<=80)  //Send PWM to motor
+	{
+		PORTC ^= 0b00000001; //Toggle Portc0
+	}
+	else
+	{
+		count = 0; // Reset counter
+		mode = 3; //Go to mode 3 (SPI communication)
+	}
+}
+
+void SPIcom (void)	//Send data to printer (mode 3)
+{
+	for (i = 0;i < 48;i++)	//Send information Byte by Byte 48 times
+	{
+		SPDR = data [i];	//Send one of the 48 Bytes in the data array
+		while(!(SPSR & (1 << SPIF)));	//Wait for end of transmission
+	}
+	mode = 4;	//Go to mode 4 (Latch)
+}
+
+void Latching (void)	//Put data in latch register (mode 4)
+{
+	count ++;
+	if (count <= 2)	//Toggle Portb4 twice
+	{
+		PORTB ^= 0b00010000;	//Toggle portb4
+	}
+	else
+	{
+		mode = 5;	//Go to mode 5 (Strobes)
+		count = 0;	//Clear count
+	}
+}
+
+void Strobe (void)	//Turn on strobes on thermal head (mode 5)
+{
+	count ++;
+	if (count == 1)
+	{
+		PORTC |= (1 << PORTC1);	//Turn on strobe 1
+	}
+	if (count == 3)
+	{
+		PORTC &= ~(1 << PORTC1);	//Turn off strobe 1
+		PORTC |= (1 << PORTC2);		//Turn on strobe 2
+	}
+	if (count == 5)
+	{
+		PORTC &= ~(1 << PORTC2);	//Turn off strobe 2
+		PORTC |= (1 << PORTC3);		//Turn on strobe 3
+	}
+	if (count == 7)
+	{
+		PORTC &= ~(1 << PORTC3);	//Turn off strobe 3
+		PORTC |= (1 << PORTC4);		//Turn on strobe 4
+	}
+	if (count == 9)
+	{
+		PORTC &= ~(1 << PORTC4);	//Turn off strobe 4
+		PORTC |= (1 << PORTC5);		//Turn on strobe 5
+	}
+	if (count == 11)
+	{
+		PORTC &= ~(1 << PORTC5);	//Turn off strobe 5
+		PORTC |= (1 << PORTC6);		//Turn on strobe 6
+	}
+	if (count == 13)
+	{
+		PORTC &= ~(1 << PORTC6);	//Turn off strobe 7
+		mode = 6;	//Go to mode 6 (Feed paper 1 line)
+		count = 0;	//Clear count
+	}
+}
+
+void Motor2 (void)	//Feed paper one line (mode 6)
+{
+	count ++;
+	num ++;
+	
+	if (count<=4)	//Send PWM to motor
+	{
+		PORTC ^= 0b00000001;	//Toggle portc0
+	}
+	else
+	{
+		if (num <= 5)		//Repeat printing 5 times to get a thicker line
+		{
+			count = 0;		//Clear count
+			mode = 7;		//Go to mode 7 (Delay)
+			
+		}
+		else				//When finishing printing clear support variables
+		{
+			count = 0;		//clear count
+			mode = 0;		//clear mode
+			num = 0;		//clear num
+		}
+	}
+	
+}
+
+void Delay (void)	//mode 7 (delay)
+{
+	delay ++;
+	if (delay == 200)	//Wait until delay gets to 200
+	{
+		mode = 3;	//GO to mode 3 (SPI communication), we repeat printing 5 times to get a thicker line
+		delay = 0;	//Clear dealy
+	}
+}
+
+void Motor3 (void)	//Feed paper 125 lines (mode 2)
+{
+	count ++;
+	if (count<=250)  //Send PWM to motor
+	{
+		PORTC ^= 0b00000001; //Toggle Portc0
+	}
+	else
+	{
+		count = 0; // Reset counter
+		finish = 0; //Go to mode 3 (SPI communication)
+	}
+}
+
+int main(void)
+{
+	DDRA = 0b00000000;  //PORTA as input, PORTA7 will be used to ADC conversion for temperature measurement
+	PORTA = 0b01111111; //Pull up resistors enabled, except in PORTA7
+	DDRB = 0b10110000;	//MOSI, SS and SCK pins as outputs for SPI communication
+	PORTB = 0b00000100;
+	DDRC = 0b11111111;  //PORTC as output
+	PORTC = 0b00000000; //Turn off PORTC
+	
+	//ADC inicialization
+	ADMUX = 0b01000111;
+	ADCSRA = 0b10000000;
+
+	//Enable SPI, master mode, clock rate fck/16
+	SPCR = 0b01010001;
+
+	//Timer2
+	//preescaler configuration
+	TCCR2 = 0b00001010;
+	//inicial value
+	OCR2 = 128;
+	//enable timer 0 interrupt
+	TIMSK = 0b10000000;
+	//enable global interrupts
+	sei();
+
+	data [0] = 255;	//This values need to be assigned by the morse code translation
+	data [1] = 255;
+	data [2] = 255;
+	data [3] = 255;
+	data [10] = 255;
+	data [20] = 255;
+	data [30] = 255;
+	data [40] = 255;
+	data [41] = 255;
+	data [42] = 255;
+	data [43] = 255;
+	
+	PORTB |= (1 << PORTB4);	//Turn on PORTB4, necesary for the SPI communication
+	
+	while(1)
+	{
+		if (!(PINB & 0b00000100))	//Check PORTA0 button (instead of this part just assign a 1 to variable mode)
+		{
+			while(!(PINB & 0b00000100));	//Wait till button is released
+			finish = 1;						//Go to mode 1 Temperature measurement
+		}
+		if (mode == 1)	//Go to mode 1 temperature measurement
+		{
+			ADCConvert();	//ADC conversion for temperature measurement
+		}
+		
+		if (mode == 3)	//Go to mode 3 (SPI communication)
+		{
+			SPIcom();	//Send data to thermal printer
+		}
+	}
+}
+
+ISR(TIMER2_COMP_vect)
+{
+	if (mode == 2)	//Go to mode 2
+	{
+		Motor1();	//Feed 40 lines of paper
+	}
+	if (mode == 4)	//Go to mode 4
+	{
+		Latching();	//Put data into latch register
+	}
+	
+	if (mode == 5)	//Go to mode 5
+	{
+		Strobe();	//Turn on thermal head strobes
+	}
+	
+	if (mode == 6)	//Go to mode 6
+	{
+		Motor2();	//Feed 1 line of paper
+	}
+	if (mode == 7)	//Go to mode 7
+	{
+		Delay();	//Delay
+	}
+	if (finish == 1)
+	{
+		Motor3();
+	}
+}
