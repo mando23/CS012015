@@ -1,0 +1,108 @@
+/*
+ * printer_v3.c
+ *
+ * Created: 29/06/2015 12:11:29 p. m.
+ *  Author: Alfonso
+ */ 
+
+
+#include <avr/io.h>
+#include <math.h>
+#include <avr/interrupt.h>
+
+double volt, digital, r1, temp;
+uint8_t i;
+uint8_t data [48];	// 48 byte array
+volatile uint8_t count, mode = 0, num = 0, finish = 0;
+volatile uint16_t delay;
+
+
+void ADCConvert (void)
+{
+
+}
+
+void Motor1 (void)	//Feed paper 40 lines (mode 2)
+{
+
+}
+
+void SPIcom (void)	//Send data to printer (mode 3)
+{
+
+}
+
+void Latching (void)	//Put data in latch register (mode 4)
+{
+
+}
+
+void Strobe (void)	//Turn on strobes on thermal head (mode 5)
+{
+
+}
+
+void Motor2 (void)	//Feed paper one line (mode 6)
+{
+
+}
+
+void Delay (void)	//mode 7 (delay)
+{
+
+}
+
+void Motor3 (void)	//Feed paper 125 lines (mode 2)
+{
+
+}
+
+int main(void)
+{
+	DDRA = 0b00000000;  //PORTA as input, PORTA7 will be used to ADC conversion for temperature measurement
+	PORTA = 0b01111111; //Pull up resistors enabled, except in PORTA7
+	DDRB = 0b10110000;	//MOSI, SS and SCK pins as outputs for SPI communication
+	PORTB = 0b00000100;
+	DDRC = 0b11111111;  //PORTC as output
+	PORTC = 0b00000000; //Turn off PORTC
+	
+	//ADC inicialization
+	ADMUX = 0b01000111;
+	ADCSRA = 0b10000000;
+
+	//Enable SPI, master mode, clock rate fck/16
+	SPCR = 0b01010001;
+
+	//Timer2
+	//preescaler configuration
+	TCCR2 = 0b00001010;
+	//inicial value
+	OCR2 = 128;
+	//enable timer 0 interrupt
+	TIMSK = 0b10000000;
+	//enable global interrupts
+	sei();
+
+	data [0] = 255;	//This values need to be assigned by the morse code translation
+	data [1] = 255;
+	data [2] = 255;
+	data [3] = 255;
+	data [10] = 255;
+	data [20] = 255;
+	data [30] = 255;
+	data [40] = 255;
+	data [41] = 255;
+	data [42] = 255;
+	data [43] = 255;
+	
+	PORTB |= (1 << PORTB4);	//Turn on PORTB4, necesary for the SPI communication
+	
+	while(1)
+	{
+	
+}
+
+ISR(TIMER2_COMP_vect)
+{
+	
+}
